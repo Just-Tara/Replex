@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { API_BASE, Device, JobState, isValidUrl } from "../lib/types";
+import { getSessionId } from "../lib/session"; 
 
 export function useVideoJobs(onAnyJobCompleted: () => void) {
   const [jobs, setJobs] = useState<Partial<Record<Device, JobState>>>({});
@@ -27,7 +28,10 @@ export function useVideoJobs(onAnyJobCompleted: () => void) {
       for (const device of selected) {
         const res = await fetch(`${API_BASE}/generate-video`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "x-user-id": getSessionId(), 
+          },
           body: JSON.stringify({ url, device }),
         });
         if (!res.ok) throw new Error(`Could not start ${device} job`);
@@ -83,7 +87,7 @@ export function useVideoJobs(onAnyJobCompleted: () => void) {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [JSON.stringify(jobs)]);
 
   return { jobs, activeTab, setActiveTab, submitting, formError, generate };

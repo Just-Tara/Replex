@@ -60,8 +60,8 @@ const autoScroll = async () => {
 };
 
 const worker = new Worker('video-generation', async job => {
-  const { url, device } = job.data;
-  console.log(`\n[Job ${job.id}] Started for URL: ${url} on ${device}`);
+  const { url, device, userId } = job.data; // <-- NEW: Extract userId
+  console.log(`\n[Job ${job.id}] Started for URL: ${url} on ${device} (User: ${userId})`);
 
   const browserArgs = ['--window-size=1920,1080'];
   const browser = await chromium.launch({ headless: true, args: browserArgs });
@@ -95,116 +95,118 @@ const worker = new Worker('video-generation', async job => {
       break;
   }
 
-  // --- Warm-up pass ---
-  console.log(`[Job ${job.id}] Warming up cache for ${url}...`);
-  const tempBrowser = await chromium.launch({ headless: true, args: browserArgs });
-  
-  //  Turn off recording for the warm-up pass
-  const warmUpConfig = { ...viewportConfig };
-  delete warmUpConfig.recordVideo; 
+  let originalVideoPath = null;
+  let context = null;
 
-  const tempContext = await tempBrowser.newContext(warmUpConfig);
-  const tempPage = await tempContext.newPage();
-  await tempPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>{});
-  await tempBrowser.close();
+  try {
+    // --- Warm-up pass ---
+    console.log(`[Job ${job.id}] Warming up cache for ${url}...`);
+    const tempBrowser = await chromium.launch({ headless: true, args: browserArgs });
 
-  await job.updateProgress(30);
+    //  Turn off recording for the warm-up pass
+    const warmUpConfig = { ...viewportConfig };
+    delete warmUpConfig.recordVideo; 
 
-  // --- Real recording pass ---
-  console.log(`[Job ${job.id}] Recording ${device} view...`);
-  const context = await browser.newContext(viewportConfig);
-  const page = await context.newPage();
+    const tempContext = await tempBrowser.newContext(warmUpConfig);
+    const tempPage = await tempContext.newPage();
+    await tempPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>{});
+    await tempBrowser.close();
 
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>{});
-  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(()=>{});
-  await page.waitForTimeout(1000);
+    await job.updateProgress(30);
 
-  await job.updateProgress(40);
+    // --- Real recording pass ---
+    console.log(`[Job ${job.id}] Recording ${device} view...`);
+    context = await browser.newContext(viewportConfig);
+    const page = await context.newPage();
 
-  //  Scroll the home page
-  await page.evaluate(autoScroll).catch(() => console.log(`[Job ${job.id}] Scroll interrupted, ignoring...`));
-  await page.waitForTimeout(1500);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>{});
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(()=>{});
+    await page.waitForTimeout(1000);
 
-  await job.updateProgress(50);
+    await job.updateProgress(40);
 
-  //  INTERACTION: Loop 2 times to click multiple links!
-  const numberOfClicks = 2;
+    //  Scroll the home page
+    await page.evaluate(autoScroll).catch(() => console.log(`[Job ${job.id}] Scroll interrupted, ignoring...`));
+    await page.waitForTimeout(1500);
 
-  for (let i = 0; i < numberOfClicks; i++) {
-    console.log(`[Job ${job.id}] Looking for link ${i + 1} to click...`);
+    await job.updateProgress(50);
 
-    const targetHref = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a'));
-      const validLinks = links.filter(a => 
-        a.href && 
-        a.href.startsWith(window.location.origin) && 
-        a.href !== window.location.href &&
-        a.target !== '_blank' && // MUST stay in the same tab
-        a.getBoundingClientRect().width > 0 &&
-        a.getBoundingClientRect().height > 0
-      );
+    //  INTERACTION: Loop 2 times to click multiple links!
+    const numberOfClicks = 2;
 
-      if (validLinks.length === 0) return null;
-      const randomIndex = Math.floor(Math.random() * validLinks.length);
-      return validLinks[randomIndex].getAttribute('href');
-    }).catch(() => null);
+    for (let i = 0; i < numberOfClicks; i++) {
+      console.log(`[Job ${job.id}] Looking for link ${i + 1} to click...`);
 
-    if (targetHref) {
-      console.log(`[Job ${job.id}] Randomly selected link: ${targetHref}. Moving to click...`);
-      const linkLocator = page.locator(`a[href="${targetHref}"]`).first();
+      const targetHref = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a'));
+        const validLinks = links.filter(a => 
+          a.href && 
+          a.href.startsWith(window.location.origin) && 
+          a.href !== window.location.href &&
+          a.target !== '_blank' && // MUST stay in the same tab
+          a.getBoundingClientRect().width > 0 &&
+          a.getBoundingClientRect().height > 0
+        );
 
-      if (await linkLocator.isVisible().catch(() => false)) {
-        await linkLocator.scrollIntoViewIfNeeded().catch(()=>{});
-        await page.waitForTimeout(1000); 
-        await linkLocator.click().catch(()=>{});
+        if (validLinks.length === 0) return null;
+        const randomIndex = Math.floor(Math.random() * validLinks.length);
+        return validLinks[randomIndex].getAttribute('href');
+      }).catch(() => null);
 
-        // Wait for the NEW page to load
-        console.log(`[Job ${job.id}] Link clicked! Waiting for new page to load...`);
-        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(()=>{});
-        await page.waitForTimeout(1500); 
+      if (targetHref) {
+        console.log(`[Job ${job.id}] Randomly selected link: ${targetHref}. Moving to click...`);
+        const linkLocator = page.locator(`a[href="${targetHref}"]`).first();
 
-        // Scroll the NEW page
-        await page.evaluate(autoScroll).catch(()=>{}); 
-        await page.waitForTimeout(1500);
+        if (await linkLocator.isVisible().catch(() => false)) {
+          await linkLocator.scrollIntoViewIfNeeded().catch(()=>{});
+          await page.waitForTimeout(1000); 
+          await linkLocator.click().catch(()=>{});
+
+          // Wait for the NEW page to load
+          console.log(`[Job ${job.id}] Link clicked! Waiting for new page to load...`);
+          await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(()=>{});
+          await page.waitForTimeout(1500); 
+
+          // Scroll the NEW page
+          await page.evaluate(autoScroll).catch(()=>{}); 
+          await page.waitForTimeout(1500);
+        } else {
+          console.log(`[Job ${job.id}] Link became hidden, skipping click ${i + 1}.`);
+          break; // Stop loop if element disappeared
+        }
       } else {
-        console.log(`[Job ${job.id}] Link became hidden, skipping click ${i + 1}.`);
-        break; // Stop loop if element disappeared
+        console.log(`[Job ${job.id}] No valid links found on this page, stopping exploration.`);
+        break; // Stop loop if no links exist on the current page
       }
-    } else {
-      console.log(`[Job ${job.id}] No valid links found on this page, stopping exploration.`);
-      break; // Stop loop if no links exist on the current page
+
+      // Update progress bar slightly for each page visited
+      await job.updateProgress(50 + ((i + 1) * 15)); 
     }
 
-    // Update progress bar slightly for each page visited
-    await job.updateProgress(50 + ((i + 1) * 15)); 
-  }
+    await job.updateProgress(80);
 
-  await job.updateProgress(80);
+    //  Grab Playwright's actual file path directly
+    originalVideoPath = await page.video().path();
 
-  //  Grab Playwright's actual file path directly
-  const originalVideoPath = await page.video().path();
+    await context.close(); 
+    await browser.close();
 
-  await context.close(); 
-  await browser.close();
-
-  // Upload directly to Cloudinary and Save to DB
-  try {
+    // Upload directly to Cloudinary and Save to DB
     console.log(`[Job ${job.id}] Uploading to Cloudinary...`);
     const uploadResult = await cloudinary.uploader.upload(originalVideoPath, {
       resource_type: "video",
       folder: "clip-engine" 
     });
 
-    //  Delete the local file after SUCCESSFUL upload
-    if (fs.existsSync(originalVideoPath)) {
-      fs.unlinkSync(originalVideoPath); 
-    }
-
     console.log(`[Job ${job.id}] Saving to MongoDB...`);
     const newVideo = new Video({
       websiteUrl: url,
       device: device,
-      videoUrl: uploadResult.secure_url
+      jobId: job.id,           // <-- NEW: Saving jobId to match your schema
+      status: 'completed',     // <-- NEW: Setting status to match your schema
+      videoUrl: uploadResult.secure_url,
+      publicId: uploadResult.public_id, // <-- Save publicId for deletion later
+      userId: userId           // <-- NEW: Tie this video to the user
     });
     await newVideo.save();
 
@@ -212,19 +214,20 @@ const worker = new Worker('video-generation', async job => {
     return { videoUrl: uploadResult.secure_url };
 
   } catch (error) {
-    console.error('Upload failed:', error);
-
-    //  Delete the local file after FAILED upload
-    if (fs.existsSync(originalVideoPath)) {
+    console.error('Worker Job Failed:', error);
+    if (context) await context.close().catch(()=>{});
+    if (browser) await browser.close().catch(()=>{});
+    throw error; // Rethrow so BullMQ knows it failed
+  } finally {
+    // <-- NEW: BULLETPROOF CLEANUP. This deletes the file even if Playwright crashed!
+    if (originalVideoPath && fs.existsSync(originalVideoPath)) {
       try {
         fs.unlinkSync(originalVideoPath);
-        console.log(`[Job ${job.id}] Cleaned up local file after failed upload.`);
+        console.log(`[Job ${job.id}] Cleaned up local video file.`);
       } catch (cleanupErr) {
         console.error(`[Job ${job.id}] Could not delete local file:`, cleanupErr.message);
       }
     }
-
-    throw new Error('Video generated, but cloud upload failed.');
   }
 
 }, { 

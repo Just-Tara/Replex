@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_BASE, HistoryItem } from "../lib/types";
+import { getSessionId } from "../lib/session"; 
 
 export function useHistory() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -11,7 +12,12 @@ export function useHistory() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/history`);
+      //  Attach the user ID header when fetching history
+      const res = await fetch(`${API_BASE}/api/history`, {
+        headers: {
+          "x-user-id": getSessionId(),
+        },
+      });
       if (!res.ok) throw new Error("Could not load history");
       
       const data = await res.json();
@@ -23,7 +29,7 @@ export function useHistory() {
       } else {
         setError(err instanceof Error ? err.message : "Could not load history");
       }
-      setHistory([]); // Guarantee array fallback so the UI never crashes
+      setHistory([]); 
     } finally {
       setLoading(false);
     }
@@ -36,7 +42,13 @@ export function useHistory() {
   const remove = async (id: string) => {
     setDeletingId(id);
     try {
-      const res = await fetch(`${API_BASE}/api/history/${id}`, { method: "DELETE" });
+      //  Attach the user ID header when deleting so it knows who is asking
+      const res = await fetch(`${API_BASE}/api/history/${id}`, { 
+        method: "DELETE",
+        headers: {
+          "x-user-id": getSessionId(),
+        },
+      });
       if (!res.ok) throw new Error("Delete failed");
       setHistory((prev) => prev.filter((h) => h._id !== id));
     } catch {

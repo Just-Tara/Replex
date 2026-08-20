@@ -20,10 +20,17 @@ const videoSchema = new mongoose.Schema({
   videoUrl: { 
     type: String 
   },
+  publicId: { 
+    type: String 
+  },
+  userId: { 
+    type: String,
+    required: true
+  },
   createdAt: { 
     type: Date, 
     default: Date.now 
-  }
+  },
 });
 
 module.exports = mongoose.model('Video', videoSchema);

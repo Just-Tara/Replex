@@ -20,14 +20,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
 const videoDir = path.join(__dirname, 'videos');
 if (!fs.existsSync(videoDir)) {
     fs.mkdirSync(videoDir);
 }
 app.use('/videos', express.static(videoDir));
 
-mongoose.connect(process.env.MONGO_URI )
+mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
@@ -38,14 +37,19 @@ const videoQueue = new Queue('video-generation', { connection: redisConnection }
 
 app.post('/generate-video', async (req, res) => {
     const { url, device = 'mobile' } = req.body; 
+    const userId = req.headers['x-user-id']; // <-- NEW: Grab user ID from frontend
 
     if (!url) {
         return res.status(400).json({ error: 'URL is required' });
     }
-    const job = await videoQueue.add('record-site', { url, device });
+    if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    // <-- NEW: Pass userId into the job
+    const job = await videoQueue.add('record-site', { url, device, userId }); 
     res.json({ message: 'Video generation started', jobId: job.id });
 });
-
 
 app.get('/job-status/:id', async (req, res) => {
     const { id } = req.params;
@@ -68,14 +72,22 @@ app.get('/job-status/:id', async (req, res) => {
 });
 
 app.get('/api/history', async (req, res) => {
+    const userId = req.headers['x-user-id'];
+
+    if (!userId) {
+        return res.json([]); // <-- NEW: Return empty array if no user ID is provided
+    }
+
     try {
-        const videos = await Video.find().sort({ createdAt: -1 });
+        // <-- NEW: Filter by userId so nobody sees your history
+        const videos = await Video.find({ userId }).sort({ createdAt: -1 });
         res.json(videos);
     } catch (err) {
         console.error('Error fetching video history:', err);
         res.status(500).json({ error: 'Failed to fetch video history' });
     }   
-})
+});
+
 app.delete('/api/history/:id', async (req, res) => {
     const { id } = req.params;
     try {
