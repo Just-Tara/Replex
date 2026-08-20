@@ -6,6 +6,7 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const cloudinary = require('cloudinary').v2;
 const Video = require('./models/video');
+const IORedis = require('ioredis');
 
 // Configure Cloudinary
 cloudinary.config({ 
@@ -19,7 +20,9 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Worker connected to MongoDB!'))
   .catch(err => console.error('Worker MongoDB error:', err));
 
-const redisConnection = { host: '127.0.0.1', port: 6379 };
+const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
+  maxRetriesPerRequest: null
+});
 const videoDir = path.join(__dirname, 'videos');
 
 if (!fs.existsSync(videoDir)) {

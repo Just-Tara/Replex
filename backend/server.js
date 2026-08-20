@@ -7,6 +7,7 @@ const { Queue } = require('bullmq');
 const mongoose = require('mongoose');
 const Video = require('./models/video');
 const cloudinary = require('cloudinary').v2;
+const IORedis = require('ioredis');
 const PORT = process.env.PORT || 5000;
 
 cloudinary.config({
@@ -30,7 +31,9 @@ mongoose.connect(process.env.MONGO_URI )
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-const redisConnection = { host: '127.0.0.1', port: 6379 };
+const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
+  maxRetriesPerRequest: null
+});
 const videoQueue = new Queue('video-generation', { connection: redisConnection });
 
 app.post('/generate-video', async (req, res) => {
