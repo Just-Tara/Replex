@@ -1,5 +1,5 @@
-# Use the official Node image
-FROM node:22-bullseye-slim
+# Use the newer Debian 12 (Bookworm) so Playwright is happy
+FROM node:22-bookworm-slim
 
 # Set the working directory inside the container
 WORKDIR /app

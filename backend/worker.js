@@ -178,7 +178,7 @@ const worker = new Worker('video-generation', async job => {
 
   await job.updateProgress(80);
 
-  // FIX 2: Grab Playwright's actual file path directly
+  //  Grab Playwright's actual file path directly
   const originalVideoPath = await page.video().path();
 
   await context.close(); // Important: Closing context finishes saving the file to disk
