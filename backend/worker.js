@@ -181,7 +181,7 @@ const worker = new Worker('video-generation', async job => {
   //  Grab Playwright's actual file path directly
   const originalVideoPath = await page.video().path();
 
-  await context.close(); // Important: Closing context finishes saving the file to disk
+  await context.close(); 
   await browser.close();
 
   // Upload directly to Cloudinary and Save to DB
