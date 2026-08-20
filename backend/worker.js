@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const cloudinary = require('cloudinary').v2;
-const Video = require('./models/Video');
+const Video = require('./models/video');
 
 // Configure Cloudinary
 cloudinary.config({ 

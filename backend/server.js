@@ -5,7 +5,7 @@ const cors = require('cors');
 const fs = require('fs');
 const { Queue } = require('bullmq');
 const mongoose = require('mongoose');
-const Video = require('./models/Video');
+const Video = require('./models/video');
 const cloudinary = require('cloudinary').v2;
 const PORT = process.env.PORT || 5000;
 
