@@ -31,7 +31,7 @@ const autoScroll = async () => {
   await new Promise((resolve) => {
     document.documentElement.style.scrollBehavior = 'auto';
     let idleTicks = 0;
-    const distance = 50; // Cut in half from 100 for a slower, smoother scroll
+    const distance = 50; 
     const timer = setInterval(() => {
       window.scrollBy(0, distance);
       const currentScroll = Math.ceil(window.innerHeight + window.scrollY);
@@ -95,7 +95,12 @@ const worker = new Worker('video-generation', async job => {
   // --- Warm-up pass ---
   console.log(`[Job ${job.id}] Warming up cache for ${url}...`);
   const tempBrowser = await chromium.launch({ headless: true, args: browserArgs });
-  const tempContext = await tempBrowser.newContext(viewportConfig);
+  
+  //  Turn off recording for the warm-up pass
+  const warmUpConfig = { ...viewportConfig };
+  delete warmUpConfig.recordVideo; 
+
+  const tempContext = await tempBrowser.newContext(warmUpConfig);
   const tempPage = await tempContext.newPage();
   await tempPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>{});
   await tempBrowser.close();
@@ -110,21 +115,21 @@ const worker = new Worker('video-generation', async job => {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>{});
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(()=>{});
   await page.waitForTimeout(1000);
-  
+
   await job.updateProgress(40);
 
-  // 1. Scroll the home page
+  //  Scroll the home page
   await page.evaluate(autoScroll).catch(() => console.log(`[Job ${job.id}] Scroll interrupted, ignoring...`));
   await page.waitForTimeout(1500);
 
   await job.updateProgress(50);
 
-  // 2. INTERACTION: Loop 2 times to click multiple links!
+  //  INTERACTION: Loop 2 times to click multiple links!
   const numberOfClicks = 2;
 
   for (let i = 0; i < numberOfClicks; i++) {
     console.log(`[Job ${job.id}] Looking for link ${i + 1} to click...`);
-    
+
     const targetHref = await page.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a'));
       const validLinks = links.filter(a => 
@@ -135,7 +140,7 @@ const worker = new Worker('video-generation', async job => {
         a.getBoundingClientRect().width > 0 &&
         a.getBoundingClientRect().height > 0
       );
-      
+
       if (validLinks.length === 0) return null;
       const randomIndex = Math.floor(Math.random() * validLinks.length);
       return validLinks[randomIndex].getAttribute('href');
@@ -144,17 +149,17 @@ const worker = new Worker('video-generation', async job => {
     if (targetHref) {
       console.log(`[Job ${job.id}] Randomly selected link: ${targetHref}. Moving to click...`);
       const linkLocator = page.locator(`a[href="${targetHref}"]`).first();
-      
+
       if (await linkLocator.isVisible().catch(() => false)) {
         await linkLocator.scrollIntoViewIfNeeded().catch(()=>{});
         await page.waitForTimeout(1000); 
         await linkLocator.click().catch(()=>{});
-        
+
         // Wait for the NEW page to load
         console.log(`[Job ${job.id}] Link clicked! Waiting for new page to load...`);
         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(()=>{});
         await page.waitForTimeout(1500); 
-        
+
         // Scroll the NEW page
         await page.evaluate(autoScroll).catch(()=>{}); 
         await page.waitForTimeout(1500);
@@ -166,31 +171,30 @@ const worker = new Worker('video-generation', async job => {
       console.log(`[Job ${job.id}] No valid links found on this page, stopping exploration.`);
       break; // Stop loop if no links exist on the current page
     }
-    
+
     // Update progress bar slightly for each page visited
     await job.updateProgress(50 + ((i + 1) * 15)); 
   }
 
   await job.updateProgress(80);
 
-  // Save the WEBM file
-  const finalPath = path.join(videoDir, `${job.id}-${device}.webm`);
-  
-  await page.close();
-  await page.video().saveAs(finalPath);
-  await context.close();
+  // FIX 2: Grab Playwright's actual file path directly
+  const originalVideoPath = await page.video().path();
+
+  await context.close(); // Important: Closing context finishes saving the file to disk
   await browser.close();
 
   // Upload directly to Cloudinary and Save to DB
   try {
     console.log(`[Job ${job.id}] Uploading to Cloudinary...`);
-    const uploadResult = await cloudinary.uploader.upload(finalPath, {
+    const uploadResult = await cloudinary.uploader.upload(originalVideoPath, {
       resource_type: "video",
       folder: "clip-engine" 
     });
 
-    if (fs.existsSync(finalPath)) {
-      fs.unlinkSync(finalPath); 
+    //  Delete the local file after SUCCESSFUL upload
+    if (fs.existsSync(originalVideoPath)) {
+      fs.unlinkSync(originalVideoPath); 
     }
 
     console.log(`[Job ${job.id}] Saving to MongoDB...`);
@@ -206,6 +210,17 @@ const worker = new Worker('video-generation', async job => {
 
   } catch (error) {
     console.error('Upload failed:', error);
+
+    //  Delete the local file after FAILED upload
+    if (fs.existsSync(originalVideoPath)) {
+      try {
+        fs.unlinkSync(originalVideoPath);
+        console.log(`[Job ${job.id}] Cleaned up local file after failed upload.`);
+      } catch (cleanupErr) {
+        console.error(`[Job ${job.id}] Could not delete local file:`, cleanupErr.message);
+      }
+    }
+
     throw new Error('Video generated, but cloud upload failed.');
   }
 
