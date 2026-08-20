@@ -13,7 +13,7 @@ export default function Home() {
     useVideoJobs(history.load);
 
   return (
-    <main className="min-h-screen px-6 py-16 sm:py-24">
+    <main className="min-h-screen px-4 sm:px-6 py-10 sm:py-24 overflow-x-hidden">
       <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-12 flex items-center gap-3">

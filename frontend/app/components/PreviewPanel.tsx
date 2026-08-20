@@ -17,12 +17,12 @@ export function PreviewPanel({
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 font-mono-display text-xs">
+      <div className="flex gap-1 mb-4 font-mono-display text-xs overflow-x-auto">
         {requestedDevices.map((d, i) => (
           <button
             key={d}
             onClick={() => setActiveTab(d)}
-            className={`px-3 py-2 rounded-t-md border-b-2 tracking-widest transition-colors ${
+            className={`shrink-0 px-3 py-2 rounded-t-md border-b-2 tracking-widest transition-colors ${
               activeTab === d
                 ? "border-accent text-fg"
                 : "border-transparent text-muted hover:text-fg"
@@ -33,7 +33,7 @@ export function PreviewPanel({
         ))}
       </div>
 
-      <div className="rounded-lg border border-border bg-surface p-8 flex flex-col items-center">
+      <div className="rounded-lg border border-border bg-surface p-4 sm:p-8 flex flex-col items-center">
         {active?.videoUrl && activeTab ? (
           <>
             <DeviceFrame device={activeTab} videoUrl={active.videoUrl} />

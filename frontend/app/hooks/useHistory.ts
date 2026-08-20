@@ -13,10 +13,17 @@ export function useHistory() {
     try {
       const res = await fetch(`${API_BASE}/api/history`);
       if (!res.ok) throw new Error("Could not load history");
+      
       const data = await res.json();
       setHistory(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load history");
+      // Intercept the specific network error for better UX
+      if (err instanceof TypeError && err.message === "Failed to fetch") {
+        setError("Cannot connect to the server. It might be waking up from sleep mode—please wait 30 seconds and refresh.");
+      } else {
+        setError(err instanceof Error ? err.message : "Could not load history");
+      }
+      setHistory([]); // Guarantee array fallback so the UI never crashes
     } finally {
       setLoading(false);
     }
