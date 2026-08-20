@@ -31,7 +31,7 @@ mongoose.connect(process.env.MONGO_URI )
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
+const redisConnection = new IORedis(process.env.REDIS_URL, {
   maxRetriesPerRequest: null
 });
 const videoQueue = new Queue('video-generation', { connection: redisConnection });
