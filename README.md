@@ -1,36 +1,146 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
 
-First, run the development server:
+```markdown
+# Replex 
+
+Replex is a full-stack automation tool that transforms any URL into a high-quality demo reel. It utilizes a headless browser to autonomously navigate, scroll, and interact with web pages, recording the session across multiple responsive viewports (Mobile, Tablet, Desktop) and generating a ready-to-post video.
+
+## Features
+*   **Automated UI Recording:** Headless Playwright workers simulate real user behavior (scrolling, clicking random internal links).
+*   **Responsive Viewports:** Generates specific video dimensions for iPhone 13, iPad Gen 7, and standard Desktop resolutions.
+*   **Asynchronous Processing:** BullMQ and Redis handle intensive video encoding in the background without blocking the UI.
+*   **Anonymous Sessions:** No login required. A sticky, anonymous `localStorage` ID keeps user generation history completely private.
+*   **Cloud Storage:** Direct-to-Cloudinary uploading with auto-cleanup of local `.webm` files to prevent server memory bloat.
+
+---
+
+## System Design Architecture
+
+```mermaid
+graph TD
+    A[Client UI / Next.js] -->|HTTP POST + x-user-id| B(Express API Server)
+    B -->|Add Job to Queue| C[(Redis / BullMQ)]
+    C -->|Process Job| D[Playwright Worker Node]
+    D -->|Navigate & Record| E[Target Website]
+    D -->|Upload mp4| F[Cloudinary Storage]
+    D -->|Save Metadata| G[(MongoDB)]
+    B -->|Fetch History| G
+
+```
+
+---
+
+## Tech Stack
+
+* **Frontend:** Next.js (React), TypeScript, Tailwind CSS
+* **Backend:** Node.js, Express.js, Playwright
+* **Database & Queue:** MongoDB (Mongoose), BullMQ, Redis
+* **Storage:** Cloudinary
+
+---
+
+## Local Setup Instructions
+
+### Prerequisites
+
+You will need Node.js, a MongoDB cluster URI, a Redis instance URI, and a Cloudinary account.
+
+### 1. Clone & Install
+
+```bash
+git clone [https://github.com/just-tara/replex.git](https://github.com/just-tara/replex.git)
+cd replex
+npm install
+
+```
+
+### 2. Install Playwright Browsers
+
+*Crucial step:* The background worker requires local browser binaries to record the videos.
+
+```bash
+npx playwright install chromium
+
+```
+
+### 3. Environment Variables
+
+Create a `.env` file in the root directory and add your credentials:
+
+```env
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+REDIS_URL=your_redis_connection_string
+CLOUDINARY_CLOUD_NAME=your_cloudinary_name
+CLOUDINARY_API_KEY=your_cloudinary_key
+CLOUDINARY_API_SECRET=your_cloudinary_secret
+NEXT_PUBLIC_API_URL=http://localhost:5000
+
+```
+
+### 4. Run the Application
+
+Start the development server and the background worker queue:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API Documentation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+All frontend requests must include the `x-user-id` header to associate videos with the anonymous session.
 
-## Learn More
+### `POST /generate-video`
 
-To learn more about Next.js, take a look at the following resources:
+Initiates a new Playwright video recording job.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* **Headers:** `x-user-id: <UUID>`
+* **Body:** `{ "url": "https://example.com", "device": "mobile" }`
+* **Response:** `{ "message": "Video generation started", "jobId": "123" }`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### `GET /job-status/:id`
 
-## Deploy on Vercel
+Polls the BullMQ queue for the real-time status of a recording job.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+* **Response:** `{ "id": "123", "state": "active", "progress": 50, "result": null }`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### `GET /api/history`
+
+Fetches the private generation history for the current user.
+
+* **Headers:** `x-user-id: <UUID>`
+* **Response:** `Array<VideoRecord>`
+
+### `DELETE /api/history/:id`
+
+Deletes a video record from the database and removes the asset from Cloudinary.
+
+* **Headers:** `x-user-id: <UUID>`
+
+---
+
+## Contribution Guidelines
+
+Contributions, issues, and feature requests are welcome!
+
+1. **Fork the Project**
+2. **Create your Feature Branch:** `git checkout -b feature/AmazingFeature`
+3. **Commit your Changes:** `git commit -m 'Add some AmazingFeature'`
+4. **Push to the Branch:** `git push origin feature/AmazingFeature`
+5. **Open a Pull Request**
+
+Please ensure your code adheres to the existing mobile-first design patterns and dark-theme aesthetic before submitting a PR.
+
+---
+
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+## Contact 
+
+**Tara** - [@j_tara_](https://www.google.com/search?q=https://twitter.com/j_tara_)
+
