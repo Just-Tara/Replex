@@ -60,7 +60,7 @@ const autoScroll = async () => {
 };
 
 const worker = new Worker('video-generation', async job => {
-  const { url, device, userId } = job.data; // <-- NEW: Extract userId
+  const { url, device, userId } = job.data; // Extract userId
   console.log(`\n[Job ${job.id}] Started for URL: ${url} on ${device} (User: ${userId})`);
 
   const browserArgs = ['--window-size=1920,1080'];
@@ -202,11 +202,11 @@ const worker = new Worker('video-generation', async job => {
     const newVideo = new Video({
       websiteUrl: url,
       device: device,
-      jobId: job.id,           // <-- NEW: Saving jobId to match your schema
-      status: 'completed',     // <-- NEW: Setting status to match your schema
+      jobId: job.id,           // Saving jobId to match the schema
+      status: 'completed',     // Setting status to match the schema
       videoUrl: uploadResult.secure_url,
-      publicId: uploadResult.public_id, // <-- Save publicId for deletion later
-      userId: userId           // <-- NEW: Tie this video to the user
+      publicId: uploadResult.public_id, // Save publicId for deletion later
+      userId: userId           // Tie this video to the user
     });
     await newVideo.save();
 
@@ -219,7 +219,7 @@ const worker = new Worker('video-generation', async job => {
     if (browser) await browser.close().catch(()=>{});
     throw error; // Rethrow so BullMQ knows it failed
   } finally {
-    // <-- NEW: BULLETPROOF CLEANUP. This deletes the file even if Playwright crashed!
+    // deletes the file even if Playwright crashed
     if (originalVideoPath && fs.existsSync(originalVideoPath)) {
       try {
         fs.unlinkSync(originalVideoPath);

@@ -37,7 +37,7 @@ const videoQueue = new Queue('video-generation', { connection: redisConnection }
 
 app.post('/generate-video', async (req, res) => {
     const { url, device = 'mobile' } = req.body; 
-    const userId = req.headers['x-user-id']; // <-- NEW: Grab user ID from frontend
+    const userId = req.headers['x-user-id']; //  Grab user ID from frontend
 
     if (!url) {
         return res.status(400).json({ error: 'URL is required' });
@@ -46,7 +46,7 @@ app.post('/generate-video', async (req, res) => {
         return res.status(400).json({ error: 'User ID is required' });
     }
     
-    // <-- NEW: Pass userId into the job
+    //  Pass userId into the job
     const job = await videoQueue.add('record-site', { url, device, userId }); 
     res.json({ message: 'Video generation started', jobId: job.id });
 });
@@ -75,11 +75,11 @@ app.get('/api/history', async (req, res) => {
     const userId = req.headers['x-user-id'];
 
     if (!userId) {
-        return res.json([]); // <-- NEW: Return empty array if no user ID is provided
+        return res.json([]); //Return empty array if no user ID is provided
     }
 
     try {
-        // <-- NEW: Filter by userId so nobody sees your history
+        //  Filter by userId so nobody sees your history
         const videos = await Video.find({ userId }).sort({ createdAt: -1 });
         res.json(videos);
     } catch (err) {
@@ -96,7 +96,7 @@ app.delete('/api/history/:id', async (req, res) => {
             return res.status(404).json({ error: 'Video not found' });
         }
 
-        // Remove from Cloudinary first (if we have a public_id to target)
+        // Remove from Cloudinary 
         if (video.publicId) {
             await cloudinary.uploader.destroy(video.publicId, { resource_type: 'video' })
                 .catch(err => console.error('Cloudinary delete failed:', err));
