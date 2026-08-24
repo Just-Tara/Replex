@@ -1,20 +1,34 @@
-
-
-```markdown
+<div align="center">
+  
 # Replex 
 
-Replex is a full-stack automation tool that transforms any URL into a high-quality demo reel. It utilizes a headless browser to autonomously navigate, scroll, and interact with web pages, recording the session across multiple responsive viewports (Mobile, Tablet, Desktop) and generating a ready-to-post video.
+**Transform any URL into a high-quality, ready-to-post demo reel.**
+
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)]()
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)]()
+[![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)]()
+[![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)]()
+[![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)]()
+
+</div>
+
+---
+
+Replex is a full-stack automation tool that utilizes a headless browser to autonomously navigate, scroll, and interact with web pages, recording the session across multiple responsive viewports (Mobile, Tablet, Desktop) and generating a polished video.
 
 ## Features
 *   **Automated UI Recording:** Headless Playwright workers simulate real user behavior (scrolling, clicking random internal links).
-*   **Responsive Viewports:** Generates specific video dimensions for iPhone 13, iPad Gen 7, and standard Desktop resolutions.
+*   **Responsive Viewports:** Generates specific video dimensions for iPhone 13, iPad (Gen 7), and standard Desktop resolutions.
 *   **Asynchronous Processing:** BullMQ and Redis handle intensive video encoding in the background without blocking the UI.
-*   **Anonymous Sessions:** No login required. A sticky, anonymous `localStorage` ID keeps user generation history completely private.
+*   **Anonymous Sessions:** No login required. A sticky `localStorage` ID keeps user generation history completely private.
 *   **Cloud Storage:** Direct-to-Cloudinary uploading with auto-cleanup of local `.webm` files to prevent server memory bloat.
 
 ---
 
 ## System Design Architecture
+
+*(Note: GitHub automatically renders this code block into a visual diagram!)*
 
 ```mermaid
 graph TD
@@ -25,8 +39,6 @@ graph TD
     D -->|Upload mp4| F[Cloudinary Storage]
     D -->|Save Metadata| G[(MongoDB)]
     B -->|Fetch History| G
-
-```
 
 ---
 
