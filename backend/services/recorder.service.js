@@ -1,6 +1,8 @@
 const { chromium, devices } = require('playwright');
-const path = require('path');
 
+/**
+ * Automated smooth page scroll utility.
+ */
 const autoScroll = async () => {
   await new Promise((resolve) => {
     document.documentElement.style.scrollBehavior = 'auto';
@@ -30,12 +32,17 @@ const autoScroll = async () => {
   });
 };
 
+/**
+ * Resolves device configuration and Playwright viewport options.
+ * @param {string} device
+ * @param {string} outputDir
+ * @returns {object} Viewport configuration
+ */
 const getViewportConfig = (device, outputDir) => {
   switch (device) {
     case 'desktop':
       return {
         viewport: { width: 1440, height: 900 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         isMobile: false,
         hasTouch: false,
         recordVideo: { dir: outputDir, size: { width: 1440, height: 900 } }
@@ -56,6 +63,15 @@ const getViewportConfig = (device, outputDir) => {
   }
 };
 
+/**
+ * Records website interaction using Playwright and saves video to outputDir.
+ * @param {object} params
+ * @param {string} params.url
+ * @param {string} [params.device]
+ * @param {string} params.outputDir
+ * @param {Function} [params.onProgress]
+ * @returns {Promise<string>} Path to recorded video file
+ */
 const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = async () => {} }) => {
   const browserArgs = ['--window-size=1920,1080'];
   const viewportConfig = getViewportConfig(device, outputDir);
@@ -64,6 +80,7 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
   let context = null;
 
   try {
+    // --- Warm-up pass ---
     console.log(`[Recorder] Warming up cache for ${url}...`);
     const tempBrowser = await chromium.launch({ headless: true, args: browserArgs });
     const warmUpConfig = { ...viewportConfig };
@@ -75,6 +92,7 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
     await tempBrowser.close();
     await onProgress(30);
 
+    // --- Real recording pass ---
     console.log(`[Recorder] Recording ${device} view...`);
     browser = await chromium.launch({ headless: true, args: browserArgs });
     context = await browser.newContext(viewportConfig);
@@ -85,20 +103,21 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
     await page.waitForTimeout(1000);
     await onProgress(40);
 
+    // Initial page scroll
     await page.evaluate(autoScroll).catch(() => console.log('[Recorder] Scroll interrupted...'));
     await page.waitForTimeout(1000);
     await onProgress(50);
 
     if (device === 'mobile' || device === 'tablet') {
       console.log(`[Recorder] Mobile/Tablet: Preparing for menu interaction...`);
-      
-      // Snap to top to guarantee header is visible
+
+      // Snap back to top to ensure header navigation is visible
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.waitForTimeout(1500);
 
-      // Try to find a menu button and click it to reveal internal links
+      // Common mobile hamburger / navigation toggle selectors
       const menuSelectors = [
-        'button[aria-label*="menu" i]', 
+        'button[aria-label*="menu" i]',
         '[aria-label*="navigation" i]',
         '.hamburger',
         '[class*="hamburger" i]',
@@ -112,27 +131,27 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
         const menuBtn = page.locator(selector).first();
         if (await menuBtn.isVisible().catch(() => false)) {
           console.log(`[Recorder] Found menu button via: ${selector}. Clicking...`);
-          await menuBtn.click({ force: true }).catch(()=>{});
-          await page.waitForTimeout(2000); 
-          menuOpened = true;  
-          break; 
+          await menuBtn.click({ force: true }).catch(() => {});
+          await page.waitForTimeout(2000);
+          menuOpened = true;
+          break;
         }
       }
 
       if (menuOpened) {
         console.log(`[Recorder] Menu open. Forcing click on internal link...`);
-        
-        // Target standard links natively, force bypassing the dark overlay
+
+        // Target common navigation links
         const targetLink = page.locator('a', { hasText: /(Services|Pricing|About|Contact)/i }).filter({ visible: true }).first();
-        
+
         if (await targetLink.isVisible().catch(() => false)) {
           console.log(`[Recorder] Clicking visible menu link...`);
-          await targetLink.click({ force: true }).catch(()=>{});
-          
-          await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(()=>{});
+          await targetLink.click({ force: true }).catch(() => {});
+
+          await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
           await page.waitForTimeout(2000);
-          
-          await page.evaluate(autoScroll).catch(()=>{});
+
+          await page.evaluate(autoScroll).catch(() => {});
           await page.waitForTimeout(1500);
         } else {
           console.log(`[Recorder] Could not locate Services/Pricing links in the menu.`);
@@ -141,15 +160,19 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
       await onProgress(80);
 
     } else {
+      // Desktop link exploration
       const numberOfClicks = 2;
       for (let i = 0; i < numberOfClicks; i++) {
         console.log(`[Recorder] Looking for link ${i + 1} to click...`);
         const targetHref = await page.evaluate(() => {
           const links = Array.from(document.querySelectorAll('a'));
           const validLinks = links.filter(a =>
-            a.href && a.href.startsWith(window.location.origin) &&
-            a.href !== window.location.href && a.target !== '_blank' &&
-            a.getBoundingClientRect().width > 0 && a.getBoundingClientRect().height > 0
+            a.href &&
+            a.href.startsWith(window.location.origin) &&
+            a.href !== window.location.href &&
+            a.target !== '_blank' &&
+            a.getBoundingClientRect().width > 0 &&
+            a.getBoundingClientRect().height > 0
           );
           if (validLinks.length === 0) return null;
           return validLinks[Math.floor(Math.random() * validLinks.length)].getAttribute('href');
@@ -165,23 +188,28 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
             await page.waitForTimeout(1500);
             await page.evaluate(autoScroll).catch(() => {});
             await page.waitForTimeout(1500);
-          } else { break; }
-        } else { break; }
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
         await onProgress(50 + ((i + 1) * 15));
       }
       await onProgress(80);
     }
 
-   // Grab the actual path of Playwright's automatically generated file
-    const finalPath = await page.video().path(); 
-    
-    // Closing the page forces Playwright to finish saving the file to the disk
-    await page.close(); 
-    await context.close();
-    await browser.close();
+    // Grab Playwright's actual file path directly
+    const originalVideoPath = await page.video().path();
 
-    // Send this exact raw file to the worker so it deletes the right one
-    return finalPath;
+    // Closing page and context ensures the video file is completely written to disk
+    await page.close();
+    await context.close();
+    context = null;
+    await browser.close();
+    browser = null;
+
+    return originalVideoPath;
 
   } catch (error) {
     if (context) await context.close().catch(() => {});
@@ -190,4 +218,6 @@ const recordWebsite = async ({ url, device = 'mobile', outputDir, onProgress = a
   }
 };
 
-module.exports = { recordWebsite };
+module.exports = {
+  recordWebsite
+};
