@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Replex — turn a URL into a demo reel",
-  description: "Paste a website link, get back mobile and desktop walkthrough videos.",
+  title: "Replex ",
+  description: "Turn a URL into a demo reel. Paste a website link, get back mobile and desktop walkthrough videos.",
 };
 
 export const viewport: Viewport = {

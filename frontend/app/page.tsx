@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useVideoJobs } from "./hooks/useVideoJobs";
 import { useHistory } from "./hooks/useHistory";
 import { GenerateForm } from "./components/GenerateForm";
@@ -17,11 +18,15 @@ export default function Home() {
       <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-12 flex items-center gap-3">
-          <span
-            className="h-2.5 w-2.5 rounded-full bg-accent animate-rec"
-            aria-hidden="true"
-          />
-          <span className="font-mono-display text-sm tracking-widest text-muted">
+         <Image 
+          src="/replex-logo.png" 
+          alt="Replex Logo" 
+          width={100} 
+          height={100} 
+          className="object-contain animate-rec w-[30px] h-[30px] sm:w-[32px] sm:h-[32px]"
+          priority
+        />
+          <span className="font-mono-display text-lg tracking-widest text-fg font-semibold">
             Replex
           </span>
         </div>
