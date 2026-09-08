@@ -74,8 +74,10 @@ export function GenerateForm({
       {/* Enhanced error message block */}
       {formError && (
         <div className="mt-3 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-          <p className="font-medium">Something went wrong, check your internet connection or try again later.</p>
-          <p className="mt-0.5 text-xs opacity-90">{formError}</p>
+          <p className="font-medium">Failed to process request</p>
+          <p className="mt-0.5 text-xs opacity-90">
+            {formError || "An unexpected error occurred. Please try again."}
+          </p>
         </div>
       )}
     </div>
