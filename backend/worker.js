@@ -1,70 +1,61 @@
 require('dotenv').config();
 const { Worker } = require('bullmq');
-const path = require('path');
-const fs = require('fs');
-const mongoose = require('mongoose');
-const cloudinary = require('cloudinary').v2;
-const IORedis = require('ioredis');
-const Video = require('./models/video');
+const { connectDatabase } = require('./config/database');
+const { createRedisConnection } = require('./config/redis');
+const cleanupService = require('./services/cleanup.service');
 const recorderService = require('./services/recorder.service');
+const storageService = require('./services/storage.service');
+const Video = require('./models/video');
 
-// Configure Cloudinary directly in the worker
-cloudinary.config({ 
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
-  api_key: process.env.CLOUDINARY_API_KEY, 
-  api_secret: process.env.CLOUDINARY_API_SECRET 
+// Connect Worker to MongoDB
+connectDatabase('Worker').catch(err => {
+  console.error('Worker MongoDB connection error:', err);
 });
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Worker connected to MongoDB!'))
-  .catch(err => console.error('Worker MongoDB error:', err));
+// Purge any stale temp directories from previous runs/crashes
+cleanupService.purgeOldTempDirs();
 
-const redisConnection = new IORedis(process.env.REDIS_URL, {
-  maxRetriesPerRequest: null
-});
-
-const videoDir = path.join(__dirname, 'videos');
-if (!fs.existsSync(videoDir)) {
-  fs.mkdirSync(videoDir);
-}
+const redisConnection = createRedisConnection();
 
 const worker = new Worker('video-generation', async job => {
-  const { url, device, userId } = job.data;
+  const { url, device = 'mobile', userId } = job.data;
   console.log(`\n[Job ${job.id}] Started for URL: ${url} on ${device} (User: ${userId})`);
 
-  await job.updateProgress(10);
+  // Create isolated temp directory for this job
+  const jobDir = cleanupService.createJobDir(job.id);
   let originalVideoPath = null;
 
   try {
-    // 1. Record the video using your fixed recorder service
+    await job.updateProgress(10);
+
+    // 1. Record website to isolated temp directory
     originalVideoPath = await recorderService.recordWebsite({
       url,
       device,
-      outputDir: videoDir,
+      outputDir: jobDir,
       onProgress: progress => job.updateProgress(progress)
     });
 
     await job.updateProgress(85);
 
-    // 2. Upload directly to Cloudinary (bypassing storage.service.js)
-    console.log(`[Job ${job.id}] Uploading to Cloudinary...`);
-    const uploadResult = await cloudinary.uploader.upload(originalVideoPath, {
-      resource_type: "video",
-      folder: "clip-engine" 
+    // 2. Stream upload directly to Cloudinary
+    console.log(`[Job ${job.id}] Streaming video upload to Cloudinary...`);
+    const uploadResult = await storageService.uploadVideoStream(originalVideoPath, {
+      folder: 'clip-engine'
     });
 
     await job.updateProgress(95);
 
-    // 3. Save to MongoDB
+    // 3. Save record to MongoDB
     console.log(`[Job ${job.id}] Saving to MongoDB...`);
     const newVideo = new Video({
       websiteUrl: url,
       device: device,
-      jobId: job.id, 
-      status: 'completed', 
+      jobId: job.id,
+      status: 'completed',
       videoUrl: uploadResult.secure_url,
-      publicId: uploadResult.public_id, 
-      userId: userId 
+      publicId: uploadResult.public_id,
+      userId: userId
     });
     await newVideo.save();
 
@@ -73,28 +64,15 @@ const worker = new Worker('video-generation', async job => {
 
   } catch (error) {
     console.error(`[Job ${job.id}] Worker Job Failed:`, error);
-    throw error; 
-  
+    throw error;
   } finally {
-    // Aggressive Cleanup: Sweep the entire directory
-    try {
-      if (fs.existsSync(videoDir)) {
-        const files = fs.readdirSync(videoDir);
-        for (const file of files) {
-          if (file.endsWith('.webm')) {
-            const filePath = path.join(videoDir, file);
-            fs.unlinkSync(filePath);
-            console.log(`[Job ${job.id}] Swept leftover file: ${file}`);
-          }
-        }
-      }
-    } catch (cleanupErr) {
-      console.error(`[Job ${job.id}] Directory cleanup warning:`, cleanupErr.message);
-    }
+    // Clean up isolated temp directory for this job even if Playwright crashed
+    cleanupService.cleanupJobDir(jobDir);
+    console.log(`[Job ${job.id}] Cleaned up temp directory.`);
   }
-}, { 
+}, {
   connection: redisConnection,
-  lockDuration: 300000 
+  lockDuration: 300000
 });
 
 worker.on('completed', job => console.log(`[Job ${job.id}] Completed successfully!`));
