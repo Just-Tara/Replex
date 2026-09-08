@@ -18,9 +18,10 @@ cleanupService.purgeOldTempDirs();
 const redisConnection = createRedisConnection();
 
 const worker = new Worker('video-generation', async job => {
-  const { url, device = 'mobile', userId } = job.data; // Extract userId
+  const { url, device = 'mobile', userId } = job.data;
   console.log(`\n[Job ${job.id}] Started for URL: ${url} on ${device} (User: ${userId})`);
 
+  // Create isolated temp directory for this job
   const jobDir = cleanupService.createJobDir(job.id);
   let originalVideoPath = null;
 
@@ -37,7 +38,7 @@ const worker = new Worker('video-generation', async job => {
 
     await job.updateProgress(85);
 
-    // Stream upload directly to Cloudinary and Save to DB
+    // 2. Stream upload directly to Cloudinary
     console.log(`[Job ${job.id}] Streaming video upload to Cloudinary...`);
     const uploadResult = await storageService.uploadVideoStream(originalVideoPath, {
       folder: 'clip-engine'
@@ -45,15 +46,16 @@ const worker = new Worker('video-generation', async job => {
 
     await job.updateProgress(95);
 
+    // 3. Save record to MongoDB
     console.log(`[Job ${job.id}] Saving to MongoDB...`);
     const newVideo = new Video({
       websiteUrl: url,
       device: device,
-      jobId: job.id,           // Saving jobId to match the schema
-      status: 'completed',     // Setting status to match the schema
+      jobId: job.id,
+      status: 'completed',
       videoUrl: uploadResult.secure_url,
-      publicId: uploadResult.public_id, // Save publicId for deletion later
-      userId: userId           // Tie this video to the user
+      publicId: uploadResult.public_id,
+      userId: userId
     });
     await newVideo.save();
 
@@ -62,9 +64,9 @@ const worker = new Worker('video-generation', async job => {
 
   } catch (error) {
     console.error(`[Job ${job.id}] Worker Job Failed:`, error);
-    throw error; // Rethrow so BullMQ knows it failed
+    throw error;
   } finally {
-    // deletes the temp directory even if Playwright crashed
+    // Clean up isolated temp directory for this job even if Playwright crashed
     cleanupService.cleanupJobDir(jobDir);
     console.log(`[Job ${job.id}] Cleaned up temp directory.`);
   }
