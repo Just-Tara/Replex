@@ -29,11 +29,18 @@ const worker = new Worker('video-generation', async job => {
     await job.updateProgress(10);
 
     // 1. Record website to isolated temp directory
-    originalVideoPath = await recorderService.recordWebsite({
+     originalVideoPath = await recorderService.recordWebsite({
       url,
       device,
       outputDir: jobDir,
-      onProgress: progress => job.updateProgress(progress)
+      onProgress: recorderProgress => {
+        // Map the 0-100 internal recording progress into the 10 to 85 overall job window
+        // 75 represents the total percentage points available in this window (85 - 10 = 75)
+        const scaledProgress = Math.floor(10 + (recorderProgress * 0.75));
+        
+        // Use catch() to silently handle any async unhandled rejections from BullMQ
+        job.updateProgress(scaledProgress).catch(console.error);
+      }
     });
 
     await job.updateProgress(85);
